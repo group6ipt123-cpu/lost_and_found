@@ -1,186 +1,170 @@
 const express = require('express');
 const router = express.Router();
-const {
-  createClaim,
-  getAllClaims,
-  getClaimsByItem,
-  approveClaim,
-  rejectClaim,
-} = require('../controllers/claimController');
-const { protect, adminOnly } = require('../middleware/authMiddleware');
+const Claim = require('../models/Claim');
+const Item = require('../models/Item');
+const Notification = require('../models/Notification');
+const { protect, authorize } = require('../middleware/auth');
 
-/**
- * @swagger
- * tags:
- *   name: Claims
- *   description: Claim request endpoints
- */
+// @route   POST /api/claims/:itemId
+// @desc    File a claim for an item
+// @access  Private (User only)
+router.post('/:itemId', protect, authorize('user'), async (req, res) => {
+    try {
+        const item = await Item.findById(req.params.itemId);
+        
+        if (!item) {
+            return res.status(404).json({ success: false, message: 'Item not found' });
+        }
 
-/**
- * @swagger
- * /api/claims:
- *   post:
- *     summary: Submit a claim on a found item
- *     tags: [Claims]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - itemId
- *               - message
- *             properties:
- *               itemId:
- *                 type: string
- *                 description: ID of the found item to claim
- *                 example: 664f1a2b3c4d5e6f7a8b9c0d
- *               message:
- *                 type: string
- *                 description: Proof or description of ownership
- *                 example: This is my umbrella, it has my name written inside the handle
- *     responses:
- *       201:
- *         description: Claim submitted successfully
- *       400:
- *         description: Validation error or duplicate claim
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: Item not found
- *       500:
- *         description: Server error
- */
-router.post('/', protect, createClaim);
+        if (item.status !== 'pending') {
+            return res.status(400).json({ success: false, message: 'This item is no longer available for claim' });
+        }
 
-/**
- * @swagger
- * /api/claims:
- *   get:
- *     summary: Get all claims (admin sees all, student sees own)
- *     tags: [Claims]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of claims
- *       401:
- *         description: Unauthorized
- *       500:
- *         description: Server error
- */
-router.get('/', protect, getAllClaims);
+        // Check if user already filed a claim
+        const existingClaim = await Claim.findOne({
+            item: item._id,
+            claimedBy: req.user.id
+        });
 
-/**
- * @swagger
- * /api/claims/item/{itemId}:
- *   get:
- *     summary: Get all claims for a specific item (admin only)
- *     tags: [Claims]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: itemId
- *         required: true
- *         schema:
- *           type: string
- *         description: Item ID
- *     responses:
- *       200:
- *         description: List of claims for the item
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admins only
- *       404:
- *         description: Item not found
- *       500:
- *         description: Server error
- */
-router.get('/item/:itemId', protect, adminOnly, getClaimsByItem);
+        if (existingClaim) {
+            return res.status(400).json({ success: false, message: 'You already filed a claim for this item' });
+        }
 
-/**
- * @swagger
- * /api/claims/{id}/approve:
- *   put:
- *     summary: Approve a claim and auto-mark item as claimed (admin only)
- *     tags: [Claims]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Claim ID
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               adminNote:
- *                 type: string
- *                 example: Verified by student ID
- *     responses:
- *       200:
- *         description: Claim approved, item marked as claimed
- *       400:
- *         description: Claim already processed or item already claimed
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admins only
- *       404:
- *         description: Claim not found
- *       500:
- *         description: Server error
- */
-router.put('/:id/approve', protect, adminOnly, approveClaim);
+        // Create claim
+        const claim = await Claim.create({
+            item: item._id,
+            claimedBy: req.user.id,
+            proofDescription: req.body.proofDescription
+        });
 
-/**
- * @swagger
- * /api/claims/{id}/reject:
- *   put:
- *     summary: Reject a claim (admin only)
- *     tags: [Claims]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Claim ID
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               adminNote:
- *                 type: string
- *                 example: Could not verify ownership
- *     responses:
- *       200:
- *         description: Claim rejected
- *       400:
- *         description: Claim already processed
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admins only
- *       404:
- *         description: Claim not found
- *       500:
- *         description: Server error
- */
-router.put('/:id/reject', protect, adminOnly, rejectClaim);
+        // Update item status
+        item.status = 'claimed';
+        item.claimedBy = req.user.id;
+        item.claimRequestedAt = Date.now();
+        await item.save();
+
+        // Notify item owner
+        await Notification.create({
+            recipient: item.reportedBy,
+            type: 'claim_update',
+            title: 'New Claim Filed',
+            message: `${req.user.name} filed a claim for "${item.name}"`,
+            item: item._id,
+            claim: claim._id
+        });
+
+        // Notify admins
+        const admins = await User.find({ role: 'admin' });
+        for (const admin of admins) {
+            await Notification.create({
+                recipient: admin._id,
+                type: 'claim_update',
+                title: 'New Claim Requires Review',
+                message: `${req.user.name} filed a claim for "${item.name}"`,
+                item: item._id,
+                claim: claim._id
+            });
+        }
+
+        res.status(201).json({ success: true, data: claim });
+    } catch (error) {
+        res.status(400).json({ success: false, message: error.message });
+    }
+});
+
+// @route   GET /api/claims
+// @desc    Get all claims (Admin sees all, User sees their own)
+// @access  Private
+router.get('/', protect, async (req, res) => {
+    try {
+        let query = {};
+        
+        if (req.user.role !== 'admin') {
+            query.claimedBy = req.user.id;
+        }
+
+        const claims = await Claim.find(query)
+            .populate('item')
+            .populate('claimedBy', 'name email')
+            .populate('reviewedBy', 'name')
+            .sort('-createdAt');
+
+        res.status(200).json({ success: true, count: claims.length, data: claims });
+    } catch (error) {
+        res.status(400).json({ success: false, message: error.message });
+    }
+});
+
+// @route   PUT /api/claims/:claimId/verify
+// @desc    Verify a claim (Admin only)
+// @access  Private/Admin
+router.put('/:claimId/verify', protect, authorize('admin'), async (req, res) => {
+    try {
+        const { status, adminNote } = req.body;
+        
+        const claim = await Claim.findById(req.params.claimId)
+            .populate('item')
+            .populate('claimedBy');
+
+        if (!claim) {
+            return res.status(404).json({ success: false, message: 'Claim not found' });
+        }
+
+        claim.status = status;
+        claim.adminNote = adminNote;
+        claim.reviewedBy = req.user.id;
+        claim.reviewedAt = Date.now();
+        await claim.save();
+
+        // Update item status
+        const item = await Item.findById(claim.item._id);
+        
+        if (status === 'verified' || status === 'approved') {
+            item.status = 'verified';
+            item.verifiedBy = req.user.id;
+            item.verifiedAt = Date.now();
+            
+            // Notify claimant
+            await Notification.create({
+                recipient: claim.claimedBy._id,
+                type: 'verification',
+                title: 'Claim Verified!',
+                message: `Your claim for "${item.name}" has been verified. Please proceed to claim your item.`,
+                item: item._id,
+                claim: claim._id
+            });
+        } else if (status === 'ready_for_pickup') {
+            item.status = 'ready_for_pickup';
+            
+            await Notification.create({
+                recipient: claim.claimedBy._id,
+                type: 'pickup_ready',
+                title: 'Item Ready for Pickup!',
+                message: `"${item.name}" is now ready for pickup. Please visit the lost and found office.`,
+                item: item._id,
+                claim: claim._id
+            });
+        } else if (status === 'rejected') {
+            item.status = 'pending';
+            item.claimedBy = null;
+            item.claimRequestedAt = null;
+            
+            await Notification.create({
+                recipient: claim.claimedBy._id,
+                type: 'verification',
+                title: 'Claim Not Verified',
+                message: `Your claim for "${item.name}" could not be verified. Reason: ${adminNote || 'Insufficient proof'}`,
+                item: item._id,
+                claim: claim._id
+            });
+        }
+
+        await item.save();
+
+        res.status(200).json({ success: true, data: claim });
+    } catch (error) {
+        res.status(400).json({ success: false, message: error.message });
+    }
+});
 
 module.exports = router;

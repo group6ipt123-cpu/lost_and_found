@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Register</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        button { padding: 10px 20px; font-size: 16px; margin: 10px; }
+        pre { background: #f4f4f4; padding: 15px; border-radius: 5px; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Lost and Found API Test</h1>
+    
+    <h2>1. Register User</h2>
+    <button onclick="register()">Register Test User</button>
+    
+    <h2>2. Login</h2>
+    <button onclick="login()">Login Test User</button>
+    
+    <h2>Response:</h2>
+    <pre id="result">Click a button to test...</pre>
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+        
+        async function register() {
+            const resultEl = document.getElementById('result');
+            resultEl.textContent = 'Registering...';
+            
+            const data = {
+                name: "Test User",
+                email: "test123@example.com",
+                password: "123456",
+                studentId: "STU123",
+                contactNumber: "1234567890"
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/api/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                resultEl.textContent = JSON.stringify(result, null, 2);
+                resultEl.className = result.success ? 'success' : 'error';
+            } catch (error) {
+                resultEl.textContent = 'Error: ' + error.message;
+                resultEl.className = 'error';
+            }
+        }
+        
+        async function login() {
+            const resultEl = document.getElementById('result');
+            resultEl.textContent = 'Logging in...';
+            
+            const data = {
+                email: "test123@example.com",
+                password: "123456"
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                resultEl.textContent = JSON.stringify(result, null, 2);
+                resultEl.className = result.success ? 'success' : 'error';
+            } catch (error) {
+                resultEl.textContent = 'Error: ' + error.message;
+                resultEl.className = 'error';
+            }
+        }
+    </script>
+</body>
+</html>

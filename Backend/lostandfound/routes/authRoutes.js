@@ -1,14 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, getMe } = require('../controllers/authController');
-const { protect } = require('../middleware/authMiddleware');
-
-/**
- * @swagger
- * tags:
- *   name: Auth
- *   description: Authentication endpoints
- */
+const User = require('../models/User');
+const { protect, authorize } = require('../middleware/auth');
 
 /**
  * @swagger
@@ -16,84 +9,144 @@ const { protect } = require('../middleware/authMiddleware');
  *   post:
  *     summary: Register a new user
  *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *               - email
- *               - password
- *             properties:
- *               name:
- *                 type: string
- *                 example: Juan dela Cruz
- *               email:
- *                 type: string
- *                 example: juan@school.edu
- *               password:
- *                 type: string
- *                 example: mypassword123
- *     responses:
- *       201:
- *         description: User registered successfully
- *       400:
- *         description: Email already registered
- *       500:
- *         description: Server error
  */
-router.post('/register', register);
+router.post('/register', async (req, res) => {
+    try {
+        const { name, email, password, studentId, contactNumber } = req.body;
+
+        const userExists = await User.findOne({ email: email.toLowerCase() });
+        if (userExists) {
+            return res.status(400).json({
+                success: false,
+                message: 'User already exists with this email'
+            });
+        }
+
+        const user = await User.create({
+            name,
+            email: email.toLowerCase(),
+            password,
+            studentId,
+            contactNumber,
+            role: 'user'
+        });
+
+        const token = user.getSignedJwtToken();
+
+        res.status(201).json({
+            success: true,
+            token,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                studentId: user.studentId,
+                contactNumber: user.contactNumber
+            }
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
 
 /**
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Login a user
+ *     summary: Login user
  *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 example: juan@school.edu
- *               password:
- *                 type: string
- *                 example: mypassword123
- *     responses:
- *       200:
- *         description: Login successful, returns JWT token
- *       401:
- *         description: Invalid credentials
- *       500:
- *         description: Server error
  */
-router.post('/login', login);
+router.post('/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide an email and password'
+            });
+        }
+
+        const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
+        }
+
+        const isMatch = await user.matchPassword(password);
+
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
+        }
+
+        const token = user.getSignedJwtToken();
+
+        res.status(200).json({
+            success: true,
+            token,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                studentId: user.studentId,
+                contactNumber: user.contactNumber
+            }
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
 
 /**
  * @swagger
  * /api/auth/me:
  *   get:
- *     summary: Get current logged-in user
+ *     summary: Get current user
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Returns current user info
- *       401:
- *         description: No token provided
- *       404:
- *         description: User not found
  */
-router.get('/me', protect, getMe);
+router.get('/me', protect, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        res.status(200).json({
+            success: true,
+            data: user
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Logout user
+ *     tags: [Auth]
+ */
+router.post('/logout', (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: 'Logged out successfully'
+    });
+});
 
 module.exports = router;

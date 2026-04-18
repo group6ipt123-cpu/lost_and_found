@@ -9,42 +9,52 @@ const claimRoutes = require('./routes/claimRoutes');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsDoc = require('swagger-jsdoc');
 const connectDB = require('./config/db');
-const { authLimiter, apiLimiter } = require('./middleware/rateLimiter');
-const { notFound, errorHandler } = require('./middleware/errorHandler');
+const notificationRoutes = require('./routes/notificationRoutes');
+const inquiryRoutes = require('./routes/inquiryRoutes');
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// MIDDLEWARE
+app.use(cors({
+    origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5000'],
+    credentials: true
+}));
 app.use(helmet());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// GENERAL RATE LIMIT - applies to all routes
-app.use('/api/', apiLimiter);
+// DATABASE
+connectDB();
 
 // ROUTES
-app.use('/api/auth', authLimiter, authRoutes); // stricter limit on auth
+app.use('/api/auth', authRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/claims', claimRoutes);
+app.use('/api/inquiries', inquiryRoutes);
 
 // SWAGGER
 const options = {
-  definition: {
-    openapi: "3.0.0",
-    info: {
-      title: "Lost and Found API",
-      version: "1.0.0",
-    },
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: "http",
-          scheme: "bearer",
-          bearerFormat: "JWT",
+    definition: {
+        openapi: "3.0.0",
+        info: {
+            title: "Lost and Found API",
+            version: "1.0.0",
+            description: "API for Lost and Found Application",
         },
-      },
+        servers: [
+            { url: "http://localhost:3000", description: "Development server" }
+        ],
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: "http",
+                    scheme: "bearer",
+                    bearerFormat: "JWT",
+                },
+            },
+        },
     },
-    security: [{ bearerAuth: [] }],
-  },
-  apis: ["./routes/*.js", "./models/*.js"],
+    apis: ["./routes/*.js", "./models/*.js"],
 };
 
 const swaggerSpec = swaggerJsDoc(options);
@@ -55,12 +65,22 @@ app.get('/', (req, res) => {
     res.send('Lost and Found API running');
 });
 
-// ERROR HANDLING (must be after all routes)
-app.use(notFound);
-app.use(errorHandler);
+// 404 HANDLER
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        message: `Route ${req.originalUrl} not found`
+    });
+});
 
-// DATABASE
-connectDB();
+// ERROR HANDLER
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(err.statusCode || 500).json({
+        success: false,
+        message: err.message || 'Server Error'
+    });
+});
 
 // SERVER
 app.listen(PORT, () => {
