@@ -24,6 +24,16 @@ const Dashboard = () => {
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [uploadedImage, setUploadedImage] = useState(null);
     const [currentInquiryId, setCurrentInquiryId] = useState(null);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+    useEffect(() => {
+    setNotifications([
+        { id: 1, message: "Someone inquired about your item" },
+        { id: 2, message: "Your item has been claimed" }
+    ]);
+}, []);
+
+
     
     const [formData, setFormData] = useState({
         name: '', 
@@ -166,24 +176,65 @@ const Dashboard = () => {
             {/* Header */}
             <header className="dashboard-header">
                 <div className="header-container">
-                    <div className="header-left">
-                        <h1 className="logo">Lost & Found</h1>
-                    </div>
-                    
-                    <div className="header-right">
-                        <button className="nav-btn" onClick={() => navigate('/posts')}>
-                            Browse All
-                        </button>
-                        <button className="nav-btn" onClick={() => setShowProfile(true)}>
-                            Profile
-                        </button>
-                        <div className="user-info">
-                            <span className="user-name">{user?.name}</span>
-                            <span className={`user-role ${user?.role}`}>{user?.role}</span>
+    <div className="header-left">
+        <h1 className="logo">Lost & Found</h1>
+    </div>
+
+  <div className="header-right">
+    <button className="nav-btn" onClick={() => navigate('/posts')}>
+        Browse All
+    </button>
+
+    {/* PROFILE FIRST */}
+    <button className="nav-btn" onClick={() => setShowProfile(true)}>
+        Profile
+    </button>
+
+    {/* NOTIFICATION BELL SECOND */}
+    <div className="notification-wrapper">
+        <button
+            className="notification-btn"
+            onClick={() => {
+                setShowNotifications(!showNotifications);
+                setNotifications([]); // clears badge when clicked
+            }}
+        >
+            🔔
+
+            {notifications.length > 0 && (
+                <span className="notification-badge">
+                    {notifications.length > 9 ? '9+' : notifications.length}
+                </span>
+            )}
+        </button>
+
+        {showNotifications && (
+            <div className="notification-dropdown">
+                <h4>Notifications</h4>
+
+                {notifications.length > 0 ? (
+                    notifications.map((notif, index) => (
+                        <div key={index} className="notification-item">
+                            {notif.message}
                         </div>
-                        <button className="logout-btn" onClick={logout}>Sign Out</button>
-                    </div>
-                </div>
+                    ))
+                ) : (
+                    <div className="no-notif">No notifications</div>
+                )}
+            </div>
+        )}
+    </div>
+
+    <div className="user-info">
+        <span className="user-name">{user?.name}</span>
+        <span className={`user-role ${user?.role}`}>{user?.role}</span>
+    </div>
+
+    <button className="logout-btn" onClick={logout}>
+        Sign Out
+    </button>
+</div>
+    </div>
             </header>
 
             {/* Main Content */}
