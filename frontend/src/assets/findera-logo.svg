@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background Circle -->
+  <circle cx="100" cy="100" r="95" fill="#0B3A66" stroke="#F4B400" stroke-width="4"/>
+  
+  <!-- Inner Ring -->
+  <circle cx="100" cy="100" r="75" fill="none" stroke="#F4B400" stroke-width="2" opacity="0.5"/>
+  
+  <!-- Magnifying Glass -->
+  <circle cx="85" cy="80" r="40" fill="none" stroke="#F4B400" stroke-width="6"/>
+  <line x1="115" y1="110" x2="145" y2="140" stroke="#F4B400" stroke-width="6" stroke-linecap="round"/>
+  
+  <!-- Text -->
+  <text x="100" y="185" text-anchor="middle" font-family="Arial Black, Arial" font-weight="900" font-size="28" fill="#FFFFFF" letter-spacing="2">FindEra</text>
+</svg>

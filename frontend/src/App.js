@@ -5,37 +5,25 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import AllPostsScreen from './components/AllPostsScreen';
+import AdminDashboard from './components/AdminDashboard';
 import './App.css';
 
-// Protected Route Component
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({ children, adminOnly = false }) => {
     const { user, loading } = useAuth();
     
     if (loading) {
-        return (
-            <div className="loading-screen">
-                <div className="spinner"></div>
-                <p>Loading...</p>
-            </div>
-        );
+        return <div className="loading-screen"><div className="spinner"></div></div>;
     }
     
-    return user ? children : <Navigate to="/login" replace />;
+    if (!user) return <Navigate to="/login" replace />;
+    if (adminOnly && user.role !== 'admin') return <Navigate to="/dashboard" replace />;
+    
+    return children;
 };
 
-// Public Route Component (redirects if already logged in)
 const PublicRoute = ({ children }) => {
     const { user, loading } = useAuth();
-    
-    if (loading) {
-        return (
-            <div className="loading-screen">
-                <div className="spinner"></div>
-                <p>Loading...</p>
-            </div>
-        );
-    }
-    
+    if (loading) return <div className="loading-screen"><div className="spinner"></div></div>;
     return user ? <Navigate to="/dashboard" replace /> : children;
 };
 
@@ -44,31 +32,11 @@ function App() {
         <Router>
             <Routes>
                 <Route path="/" element={<Navigate to="/login" replace />} />
-                
-                <Route path="/login" element={
-                    <PublicRoute>
-                        <Login />
-                    </PublicRoute>
-                } />
-                
-                <Route path="/register" element={
-                    <PublicRoute>
-                        <Register />
-                    </PublicRoute>
-                } />
-                
-                <Route path="/dashboard" element={
-                    <ProtectedRoute>
-                        <Dashboard />
-                    </ProtectedRoute>
-                } />
-                
-                <Route path="/posts" element={
-                    <ProtectedRoute>
-                        <AllPostsScreen />
-                    </ProtectedRoute>
-                } />
-                
+                <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+                <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+                <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminDashboard /></ProtectedRoute>} />
+                <Route path="/posts" element={<ProtectedRoute><AllPostsScreen /></ProtectedRoute>} />
                 <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
         </Router>

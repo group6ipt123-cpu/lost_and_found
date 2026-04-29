@@ -1,40 +1,49 @@
 const mongoose = require('mongoose');
 
-const inquirySchema = new mongoose.Schema({
-    item: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Item',
-        required: true
-    },
-    sender: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-    receiver: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-    message: {
+const itemSchema = new mongoose.Schema({
+    name: {
         type: String,
-        required: true
+        required: [true, 'Please add an item name']
     },
-    replies: [{
-        sender: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
-        },
-        message: String,
-        createdAt: {
-            type: Date,
-            default: Date.now
-        }
-    }],
+    description: {
+        type: String,
+        required: [true, 'Please add a description']
+    },
+    category: {
+        type: String,
+        enum: ['lost', 'found'],
+        required: [true, 'Please specify category']
+    },
+    itemCategory: {
+        type: String,
+        default: 'Others'
+    },
+    location: {
+        type: String,
+        required: [true, 'Please add location']
+    },
+    date: {
+        type: Date,
+        required: [true, 'Please add date']
+    },
+    image: {
+        type: String,
+        default: null
+    },
     status: {
         type: String,
-        enum: ['pending', 'replied', 'resolved', 'closed'],
+        enum: ['pending', 'claimed', 'verified', 'ready_for_pickup', 'closed'],
         default: 'pending'
+    },
+    reportedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    claimedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
     },
     createdAt: {
         type: Date,
@@ -42,4 +51,4 @@ const inquirySchema = new mongoose.Schema({
     }
 });
 
-module.exports = mongoose.model('Inquiry', inquirySchema);
+module.exports = mongoose.models.Item || mongoose.model('Item', itemSchema);

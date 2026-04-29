@@ -58,24 +58,16 @@ router.post('/', protect, async (req, res) => {
  *     summary: Get single item
  *     tags: [Items]
  */
-router.get('/:id', async (req, res) => {
+router.get('/', async (req, res) => {
     try {
-        const item = await Item.findById(req.params.id).populate('reportedBy', 'name email');
-        if (!item) {
-            return res.status(404).json({
-                success: false,
-                message: 'Item not found'
-            });
-        }
+        const items = await Item.find();
         res.status(200).json({
             success: true,
-            data: item
+            count: items.length,
+            data: items
         });
     } catch (error) {
-        res.status(400).json({
-            success: false,
-            message: error.message
-        });
+        res.status(400).json({ success: false, message: error.message });
     }
 });
 
