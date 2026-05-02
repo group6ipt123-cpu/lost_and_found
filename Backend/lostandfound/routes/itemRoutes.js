@@ -1,157 +1,57 @@
 const express = require('express');
 const router = express.Router();
-const Item = require('../models/Item');
-const { protect } = require('../middleware/auth');
+const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
 
-/**
- * @swagger
- * /api/items:
- *   get:
- *     summary: Get all items
- *     tags: [Items]
- */
+const auth = (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.json({ success: false, message: 'Authentication required' });
+    try {
+        req.user = jwt.verify(token, process.env.JWT_SECRET || 'secret123');
+        next();
+    } catch (err) {
+        res.json({ success: false, message: 'Invalid token' });
+    }
+};
+
 router.get('/', async (req, res) => {
     try {
-        const items = await Item.find().populate('reportedBy', 'name email');
-        res.status(200).json({
-            success: true,
-            count: items.length,
-            data: items
-        });
-    } catch (error) {
-        res.status(400).json({
-            success: false,
-            message: error.message
-        });
-    }
+        const items = await mongoose.connection.db.collection('items').find({}).sort({ createdAt: -1 }).toArray();
+        res.json({ success: true, count: items.length, data: items });
+    } catch (err) { res.json({ success: false, message: err.message }); }
 });
 
-/**
- * @swagger
- * /api/items:
- *   post:
- *     summary: Create a new item
- *     tags: [Items]
- *     security:
- *       - bearerAuth: []
- */
-router.post('/', protect, async (req, res) => {
+router.get('/:id', async (req, res) => {
     try {
-        req.body.reportedBy = req.user.id;
-        const item = await Item.create(req.body);
-        res.status(201).json({
-            success: true,
-            data: item
-        });
-    } catch (error) {
-        res.status(400).json({
-            success: false,
-            message: error.message
-        });
-    }
+        const item = await mongoose.connection.db.collection('items').findOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+        if (!item) return res.json({ success: false, message: 'Item not found' });
+        res.json({ success: true, data: item });
+    } catch (err) { res.json({ success: false, message: err.message }); }
 });
 
-/**
- * @swagger
- * /api/items/{id}:
- *   get:
- *     summary: Get single item
- *     tags: [Items]
- */
-router.get('/', async (req, res) => {
+router.post('/', auth, async (req, res) => {
     try {
-        const items = await Item.find();
-        res.status(200).json({
-            success: true,
-            count: items.length,
-            data: items
-        });
-    } catch (error) {
-        res.status(400).json({ success: false, message: error.message });
-    }
+        const user = await mongoose.connection.db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(req.user.id) });
+        const item = {
+            name: req.body.name, description: req.body.description, category: req.body.category,
+            itemCategory: req.body.itemCategory, location: req.body.location, date: new Date(req.body.date),
+            image: req.body.image || null, status: 'pending', createdAt: new Date(),
+            userId: req.user.id, userName: user.name, userEmail: user.email,
+            userStudentId: user.studentId || null, userContactNumber: user.contactNumber || null
+        };
+        const result = await mongoose.connection.db.collection('items').insertOne(item);
+        res.json({ success: true, data: { ...item, _id: result.insertedId } });
+    } catch (err) { res.json({ success: false, message: err.message }); }
 });
 
-/**
- * @swagger
- * /api/items/{id}:
- *   put:
- *     summary: Update item
- *     tags: [Items]
- *     security:
- *       - bearerAuth: []
- */
-router.put('/:id', protect, async (req, res) => {
+router.post('/:itemId/mark-claimed', auth, async (req, res) => {
     try {
-        let item = await Item.findById(req.params.id);
-        if (!item) {
-            return res.status(404).json({
-                success: false,
-                message: 'Item not found'
-            });
-        }
-
-        if (item.reportedBy.toString() !== req.user.id && req.user.role !== 'admin') {
-            return res.status(401).json({
-                success: false,
-                message: 'Not authorized'
-            });
-        }
-
-        item = await Item.findByIdAndUpdate(req.params.id, req.body, {
-            new: true,
-            runValidators: true
-        });
-
-        res.status(200).json({
-            success: true,
-            data: item
-        });
-    } catch (error) {
-        res.status(400).json({
-            success: false,
-            message: error.message
-        });
-    }
-});
-
-/**
- * @swagger
- * /api/items/{id}:
- *   delete:
- *     summary: Delete item
- *     tags: [Items]
- *     security:
- *       - bearerAuth: []
- */
-router.delete('/:id', protect, async (req, res) => {
-    try {
-        const item = await Item.findById(req.params.id);
-        if (!item) {
-            return res.status(404).json({
-                success: false,
-                message: 'Item not found'
-            });
-        }
-
-        if (item.reportedBy.toString() !== req.user.id && req.user.role !== 'admin') {
-            return res.status(401).json({
-                success: false,
-                message: 'Not authorized'
-            });
-        }
-
-        await item.deleteOne();
-
-        res.status(200).json({
-            success: true,
-            data: {}
-        });
-    } catch (error) {
-        res.status(400).json({
-            success: false,
-            message: error.message
-        });
-    }
+        const item = await mongoose.connection.db.collection('items').findOne({ _id: new mongoose.Types.ObjectId(req.params.itemId) });
+        if (!item) return res.json({ success: false, message: 'Item not found' });
+        if (item.userId !== req.user.id) return res.json({ success: false, message: 'Not authorized' });
+        await mongoose.connection.db.collection('items').updateOne({ _id: new mongoose.Types.ObjectId(req.params.itemId) }, { $set: { status: 'claimed', claimedAt: new Date() } });
+        res.json({ success: true, message: 'Item marked as claimed' });
+    } catch (err) { res.json({ success: false, message: err.message }); }
 });
 
 module.exports = router;

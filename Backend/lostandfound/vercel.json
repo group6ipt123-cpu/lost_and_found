@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
+    }
+  ],
+  "env": {
+    "DB_URL": "mongodb+srv://findera:FindEra2026@cluster0.tuv7csa.mongodb.net/lostandfound?retryWrites=true&w=majority&appName=Cluster0",
+    "JWT_SECRET": "findera_secret_2024",
+    "JWT_EXPIRE": "7d",
+    "NODE_ENV": "production"
+  }
+}

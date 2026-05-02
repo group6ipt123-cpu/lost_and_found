@@ -5,6 +5,8 @@ import axios from 'axios';
 import NotificationBell from './NotificationBell';
 import './MainLayout.css';
 
+/* eslint-disable react-hooks/exhaustive-deps */
+
 const MainLayout = ({ children, onOpenChatFromNotification }) => {
   const navigate = useNavigate();
   const location = useLocation();

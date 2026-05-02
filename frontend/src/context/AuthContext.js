@@ -1,7 +1,10 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 
 const AuthContext = createContext(null);
-const API_URL = 'http://localhost:5000';
+
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://lostandfound-three-kohl.vercel.app'  // Production URL
+  : 'http://localhost:5000';  // Local development
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -30,14 +33,19 @@ export const AuthProvider = ({ children }) => {
                 body: JSON.stringify({ email: email.toLowerCase(), password })
             });
             const data = await res.json();
-            if (data.success) {
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('user', JSON.stringify(data.user));
-                setUser(data.user);
-                return { success: true };
+            if (data.success || res.ok) {
+                const token = data.token;
+                const user = data.user;
+                if (token && user) {
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user', JSON.stringify(user));
+                    setUser(user);
+                    return { success: true };
+                }
             }
-            return { success: false, message: data.message };
+            return { success: false, message: data.message || 'Login failed' };
         } catch (err) {
+            console.error('Login error:', err);
             return { success: false, message: 'Network error' };
         }
     };
@@ -50,8 +58,9 @@ export const AuthProvider = ({ children }) => {
                 body: JSON.stringify(userData)
             });
             const data = await res.json();
-            return { success: data.success, message: data.message };
+            return { success: res.ok, message: data.message || (res.ok ? 'Registration successful' : 'Registration failed') };
         } catch (err) {
+            console.error('Register error:', err);
             return { success: false, message: 'Network error' };
         }
     };
